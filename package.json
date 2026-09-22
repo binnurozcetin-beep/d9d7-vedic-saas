@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@fusionstrings/swisseph-wasi": "^0.1.0",
     "geo-tz": "^8.1.9",
     "luxon": "^3.7.2"
   },
