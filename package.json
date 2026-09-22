@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "geo-tz": "^8.1.9",
+    "luxon": "^3.7.2"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.7.5"
+  }
+}
