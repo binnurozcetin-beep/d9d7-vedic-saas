@@ -1,11 +1,12 @@
-import { NominatimGeocoder } from './geocode';
+import { OpenCageGeocoder } from './geocode';
 import { resolveTimeZone } from './timezone';
 import { toJulianDayUT } from './julianDay';
 import type { BirthInput, ResolvedBirthMoment } from './types';
 
 // Modül seviyesinde tek instance: cache ve rate-limit tüm istekler
-// arasında paylaşılsın diye.
-const geocoder = new NominatimGeocoder();
+// arasında paylaşılsın diye. API key ortam değişkeninden okunuyor,
+// asla koda gömülmüyor.
+const geocoder = new OpenCageGeocoder(process.env.OPENCAGE_API_KEY ?? '');
 
 /**
  * Ham doğum verisini (isim, tarih, saat, yer metni) Swiss Ephemeris'in

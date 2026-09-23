@@ -1,26 +1,34 @@
 import { SequentialRateLimiter } from './rateLimiter';
 import type { GeocodedLocation } from './types';
 
-const NOMINATIM_ENDPOINT = 'https://nominatim.openstreetmap.org/search';
+const OPENCAGE_ENDPOINT = 'https://api.opencagedata.com/geocode/v1/json';
 
 export interface GeocodingProvider {
   geocode(query: string): Promise<GeocodedLocation | null>;
 }
 
 /**
- * OpenStreetMap Nominatim ile geocoding. Ücretsiz, dünya çapında kapsama
- * sağlıyor ve düzenli güncelleniyor. Kullanım politikası gereği:
- *  - saniyede en fazla 1 istek (rateLimiter bunu garanti eder)
- *  - açıklayıcı bir User-Agent header'ı zorunlu
- * Farklı bir sağlayıcıya geçmek gerekirse aynı `GeocodingProvider`
- * arayüzünü uygulayan yeni bir sınıf yazmak yeterli — geri kalan
- * kod (resolveBirthMoment) değişmeden çalışmaya devam eder.
+ * OpenCageData ile geocoding. OpenStreetMap dahil birden çok kaynağı
+ * birleştiren, üretim uygulamaları için tasarlanmış bir API.
+ *
+ * Nominatim'in halka açık demo sunucusunun aksine (ki bu sunucu bulut/
+ * datacenter IP aralıklarını -GitHub Codespaces, Vercel vb.- sıkça
+ * engelliyor, kendi kullanım politikasında da bunu açıkça belirtiyor),
+ * API anahtarıyla kimliklendirilen istekler güvenilir şekilde çalışır.
+ * Ücretsiz katman: günde 2.500 istek — bu aşamada fazlasıyla yeterli.
  */
-export class NominatimGeocoder implements GeocodingProvider {
+export class OpenCageGeocoder implements GeocodingProvider {
   private cache = new Map<string, GeocodedLocation | null>();
-  private limiter = new SequentialRateLimiter();
+  private limiter = new SequentialRateLimiter(1100);
 
-  constructor(private userAgent = 'vedic-chart-app/1.0 (contact@example.com)') {}
+  constructor(private apiKey: string) {
+    if (!apiKey) {
+      throw new Error(
+        'OPENCAGE_API_KEY tanımlı değil. d9d7-app/.env.local dosyasına ekleyin ' +
+        '(https://opencagedata.com adresinden ücretsiz key alınabilir).'
+      );
+    }
+  }
 
   async geocode(query: string): Promise<GeocodedLocation | null> {
     const key = query.trim().toLowerCase();
@@ -34,35 +42,33 @@ export class NominatimGeocoder implements GeocodingProvider {
   }
 
   private async fetchGeocode(query: string): Promise<GeocodedLocation | null> {
-    const url = new URL(NOMINATIM_ENDPOINT);
+    const url = new URL(OPENCAGE_ENDPOINT);
     url.searchParams.set('q', query);
-    url.searchParams.set('format', 'jsonv2');
+    url.searchParams.set('key', this.apiKey);
     url.searchParams.set('limit', '1');
-    url.searchParams.set('addressdetails', '1');
+    url.searchParams.set('no_annotations', '1');
 
-    const res = await fetch(url.toString(), {
-      headers: { 'User-Agent': this.userAgent },
-    });
-
+    const res = await fetch(url.toString());
     if (!res.ok) {
-      throw new Error(`Nominatim geocoding başarısız: ${res.status} ${res.statusText}`);
+      throw new Error(`OpenCage geocoding başarısız: ${res.status} ${res.statusText}`);
     }
 
-    const results = (await res.json()) as Array<{
-      lat: string;
-      lon: string;
-      display_name: string;
-      address?: { country_code?: string };
-    }>;
+    const data = (await res.json()) as {
+      results: Array<{
+        geometry: { lat: number; lng: number };
+        formatted: string;
+        components?: Record<string, string>;
+      }>;
+    };
 
-    if (results.length === 0) return null;
+    if (!data.results || data.results.length === 0) return null;
 
-    const best = results[0];
+    const best = data.results[0];
     return {
-      latitude: parseFloat(best.lat),
-      longitude: parseFloat(best.lon),
-      displayName: best.display_name,
-      countryCode: best.address?.country_code,
+      latitude: best.geometry.lat,
+      longitude: best.geometry.lng,
+      displayName: best.formatted,
+      countryCode: best.components?.['ISO_3166-1_alpha-2']?.toLowerCase(),
     };
   }
 }
