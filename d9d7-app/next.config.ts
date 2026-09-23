@@ -1,12 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // @fusionstrings/swisseph-wasi paketi bir .wasm dosyası içe aktarıyor;
-  // Turbopack/webpack'in bunu bundle etmeye çalışıp hata vermesini önlemek
-  // için bu paketi sunucu tarafında "external" olarak işaretliyoruz —
-  // böylece Next.js onu paketlemeye çalışmaz, doğrudan Node.js çalışma
-  // zamanında normal şekilde yüklenir.
-  serverExternalPackages: ["@fusionstrings/swisseph-wasi"],
+  // sweph, native bir Node.js eklentisidir (.node dosyası). Turbopack/webpack'in
+  // bunu bundle etmeye çalışıp hata vermesini önlemek için sunucu tarafında
+  // "external" olarak işaretliyoruz — Next.js onu paketlemeye çalışmaz,
+  // doğrudan Node.js çalışma zamanında normal require ile yüklenir.
+  serverExternalPackages: ["sweph"],
 };
 
 export default nextConfig;

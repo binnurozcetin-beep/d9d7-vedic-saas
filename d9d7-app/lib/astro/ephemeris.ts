@@ -1,27 +1,28 @@
-import { Constants, load } from '@fusionstrings/swisseph-wasi';
+import * as sweph from 'sweph';
 import { PLANET_IDS, RASI_NAMES_TR, RASI_NAMES_SANSKRIT, type PlanetName } from './constants';
 
-type SwissEphEngine = Awaited<ReturnType<typeof load>>;
-
-let enginePromise: Promise<SwissEphEngine> | null = null;
 let sidModeConfigured = false;
 
 /**
- * Motoru yalnızca bir kez yükler ve Lahiri (Chitrapaksha) ayanamsha'yı
- * ayarlar. Lahiri, Hindistan hükümetinin resmi Vedik astroloji standardı
- * ve en yaygın kullanılan sistemdir.
+ * Lahiri (Chitrapaksha) ayanamsha'yı bir kez ayarlar. Lahiri, Hindistan
+ * hükümetinin resmi Vedik astroloji standardı ve en yaygın kullanılan
+ * sistemdir.
  */
-async function getEngine(): Promise<SwissEphEngine> {
-  if (!enginePromise) {
-    enginePromise = load();
-  }
-  const eph = await enginePromise;
-  if (!sidModeConfigured) {
-    eph.swe_set_sid_mode(Constants.SE_SIDM_LAHIRI, 0, 0);
-    sidModeConfigured = true;
-  }
-  return eph;
+function ensureSidModeConfigured() {
+  if (sidModeConfigured) return;
+  sweph.set_sid_mode(sweph.constants.SE_SIDM_LAHIRI, 0, 0);
+  sidModeConfigured = true;
 }
+
+/**
+ * Ephemeris dosyaları (.se1) henüz indirilip sunucuya eklenmediği için
+ * Moshier yarı-analitik algoritmasını kullanıyoruz: dosya gerektirmez,
+ * ~0.1 açı saniyesi hassasiyet sağlar (Vedik astroloji için fazlasıyla
+ * yeterli — burç sınırları 30° aralıklı). İleride en yüksek hassasiyet
+ * istenirse .se1 dosyaları indirilip set_ephe_path() ile tanımlanabilir
+ * ve bu bayrak SEFLG_SWIEPH ile değiştirilebilir.
+ */
+const EPHEMERIS_FLAG = sweph.constants.SEFLG_MOSEPH;
 
 function longitudeToRasi(longitude: number) {
   const normalized = ((longitude % 360) + 360) % 360;
@@ -50,22 +51,20 @@ export interface PlanetPosition {
 
 /**
  * Tüm klasik gezegenlerin (Güneş'ten Satürn'e + Rahu/Ketu) sideral
- * boylamlarını hesaplar. SEFLG_SIDEREAL bayrağı, tropikal boylamdan
- * Lahiri ayanamsha'sının doğrudan motor tarafından çıkarılmasını sağlar.
+ * boylamlarını hesaplar.
  */
-export async function getPlanetPositions(julianDayUT: number): Promise<PlanetPosition[]> {
-  const eph = await getEngine();
-  const flags = Constants.SEFLG_SIDEREAL | Constants.SEFLG_SPEED;
+export function getPlanetPositions(julianDayUT: number): PlanetPosition[] {
+  ensureSidModeConfigured();
+  const flags = EPHEMERIS_FLAG | sweph.constants.SEFLG_SIDEREAL | sweph.constants.SEFLG_SPEED;
 
   const results: PlanetPosition[] = [];
 
   for (const [name, id] of Object.entries(PLANET_IDS) as [PlanetName, number][]) {
-    const { xx, error } = eph.swe_calc_ut(julianDayUT, id, flags);
-    if (error) {
-      throw new Error(`${name} pozisyonu hesaplanamadı: ${error}`);
+    const result = sweph.calc_ut(julianDayUT, id, flags);
+    if (result.flag === sweph.constants.ERR) {
+      throw new Error(`${name} pozisyonu hesaplanamadı: ${result.error}`);
     }
-    const longitude = xx[0];
-    const speedLongitude = xx[3];
+    const [longitude, , , speedLongitude] = result.data;
     results.push({
       planet: name,
       longitude,
@@ -98,30 +97,26 @@ export interface AscendantPosition {
 }
 
 /**
- * Lagna'yı (yükselen burç) hesaplar. Ev sistemi hesaplaması genelde
- * tropikal döner; bu yüzden önce tropikal Ascendant alınır, ardından
- * aynı an için Lahiri ayanamsha'sı çıkarılarak sideral Lagna'ya çevrilir.
- * Bu yöntem, kullanılan WASM sarmalayıcısının swe_houses_ex'te sideral
- * bayrağı destekleyip desteklemediğinden bağımsız olarak her zaman doğru
- * sonucu verir.
+ * Lagna'yı (yükselen burç) hesaplar. houses_ex tropikal Ascendant döner;
+ * bu yüzden aynı an için Lahiri ayanamsha'sı çıkarılarak sideral Lagna'ya
+ * çevriliyor. Bu yöntem, kullanılan sürümün sideral bayrağını houses_ex
+ * içinde nasıl işlediğinden bağımsız olarak her zaman doğru sonucu verir.
  */
-export async function getAscendant(
+export function getAscendant(
   julianDayUT: number,
   latitude: number,
   longitude: number
-): Promise<AscendantPosition> {
-  const eph = await getEngine();
+): AscendantPosition {
+  ensureSidModeConfigured();
 
   // 'W' = whole sign (tam burç) ev sistemi, Vedik astrolojide standart.
-  // Lagna'nın kendisi ev sisteminden bağımsızdır; fonksiyon parametre olarak istiyor.
-  const hsysWholeSign = 'W'.charCodeAt(0);
-  const { ascmc, error } = eph.swe_houses(julianDayUT, latitude, longitude, hsysWholeSign);
-  if (error) {
-    throw new Error(`Lagna hesaplanamadı: ${error}`);
+  const result = sweph.houses_ex(julianDayUT, EPHEMERIS_FLAG, latitude, longitude, 'W');
+  if (result.flag === sweph.constants.ERR) {
+    throw new Error(`Lagna hesaplanamadı: ${result.error}`);
   }
 
-  const tropicalAscendant = ascmc[0];
-  const ayanamsha = eph.swe_get_ayanamsa_ut(julianDayUT);
+  const tropicalAscendant = result.data.points[0]; // asc
+  const ayanamsha = sweph.get_ayanamsa_ut(julianDayUT);
   const siderealAscendant = ((tropicalAscendant - ayanamsha) % 360 + 360) % 360;
 
   return {

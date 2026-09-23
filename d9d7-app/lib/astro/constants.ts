@@ -1,4 +1,4 @@
-import { Constants } from '@fusionstrings/swisseph-wasi';
+import * as sweph from 'sweph';
 
 export const RASI_NAMES_TR = [
   'Koç', 'Boğa', 'İkizler', 'Yengeç', 'Aslan', 'Başak',
@@ -11,18 +11,18 @@ export const RASI_NAMES_SANSKRIT = [
 ] as const;
 
 export const PLANET_IDS = {
-  Sun: Constants.SE_SUN,
-  Moon: Constants.SE_MOON,
-  Mercury: Constants.SE_MERCURY,
-  Venus: Constants.SE_VENUS,
-  Mars: Constants.SE_MARS,
-  Jupiter: Constants.SE_JUPITER,
-  Saturn: Constants.SE_SATURN,
+  Sun: sweph.constants.SE_SUN,
+  Moon: sweph.constants.SE_MOON,
+  Mercury: sweph.constants.SE_MERCURY,
+  Venus: sweph.constants.SE_VENUS,
+  Mars: sweph.constants.SE_MARS,
+  Jupiter: sweph.constants.SE_JUPITER,
+  Saturn: sweph.constants.SE_SATURN,
   // Rahu için ortalama düğüm (Mean Node) kullanılıyor — BPHS ve klasik
   // Vimshottari dasha hesaplamalarının standart referansı budur.
-  // Gerçek düğüm (Constants.SE_TRUE_NODE) isteğe bağlı bir alternatiftir,
-  // bazı modern okullar bunu tercih eder.
-  Rahu: Constants.SE_MEAN_NODE,
+  // Gerçek düğüm (sweph.constants.SE_TRUE_NODE) isteğe bağlı bir
+  // alternatiftir, bazı modern okullar bunu tercih eder.
+  Rahu: sweph.constants.SE_MEAN_NODE,
 } as const;
 
 export type KnownPlanetName = keyof typeof PLANET_IDS;

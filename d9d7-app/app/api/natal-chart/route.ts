@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     }
 
     const birthMoment = await resolveBirthMoment({ name, date, time, location });
-    const chart = await castD1Chart(
+    const chart = castD1Chart(
       birthMoment.julianDayUT,
       birthMoment.location.latitude,
       birthMoment.location.longitude

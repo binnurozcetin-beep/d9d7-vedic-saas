@@ -9,12 +9,12 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@fusionstrings/swisseph-wasi": "^0.1.0",
     "geo-tz": "^8.1.9",
     "luxon": "^3.7.2",
     "next": "16.3.5",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "sweph": "^2.10.3-8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

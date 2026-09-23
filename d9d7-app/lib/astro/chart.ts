@@ -17,15 +17,13 @@ export interface D1Chart {
  * sideral pozisyonları + whole sign ev sistemine göre ev numaraları.
  * Bu çıktı, bir sonraki adımda D9/D7 varga hesaplamalarının girdisi olacak.
  */
-export async function castD1Chart(
+export function castD1Chart(
   julianDayUT: number,
   latitude: number,
   longitude: number
-): Promise<D1Chart> {
-  const [ascendant, planets] = await Promise.all([
-    getAscendant(julianDayUT, latitude, longitude),
-    getPlanetPositions(julianDayUT),
-  ]);
+): D1Chart {
+  const ascendant = getAscendant(julianDayUT, latitude, longitude);
+  const planets = getPlanetPositions(julianDayUT);
 
   const planetsWithHouses: D1PlanetPlacement[] = planets.map((p) => ({
     ...p,
