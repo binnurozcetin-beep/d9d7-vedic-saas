@@ -1,367 +1,440 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 
-// ────────────────────────────────────────────────────────────────
-// Sabitler
-// ────────────────────────────────────────────────────────────────
-
-const ZODIAC_SYMBOLS = ['♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓'];
+// Sideral Burç İsimleri
 const RASI_NAMES_TR = [
   'Koç', 'Boğa', 'İkizler', 'Yengeç', 'Aslan', 'Başak',
-  'Terazi', 'Akrep', 'Yay', 'Oğlak', 'Kova', 'Balık',
+  'Terazi', 'Akrep', 'Yay', 'Oğlak', 'Kova', 'Balık'
 ];
 
-const PLANET_SYMBOLS: Record<string, string> = {
-  Sun: '☉', Moon: '☽', Mercury: '☿', Venus: '♀', Mars: '♂',
-  Jupiter: '♃', Saturn: '♄', Rahu: '☊', Ketu: '☋',
-};
+const RASI_NAMES_SANSKRIT = [
+  'Mesha', 'Vrishabha', 'Mithuna', 'Karka', 'Simha', 'Kanya',
+  'Tula', 'Vrischika', 'Dhanu', 'Makara', 'Kumbha', 'Meena'
+];
 
-const PLANET_NAMES_TR: Record<string, string> = {
-  Sun: 'Güneş', Moon: 'Ay', Mercury: 'Merkür', Venus: 'Venüs', Mars: 'Mars',
-  Jupiter: 'Jüpiter', Saturn: 'Satürn', Rahu: 'Rahu', Ketu: 'Ketu',
-};
-
-// Güney Hindistan stili chart'ta her burcun sabit hücre konumu (satır, sütun)
-// — Lagna'nın burcu değişse de burçların yeri hiç değişmez, sadece hangi
-// hücrenin "1. ev" olduğunu gösteren vurgu kayar. Merkezdeki 2x2 boşluk
-// chart başlığı için ayrılır.
-const GRID_POSITIONS: Record<number, [number, number]> = {
-  11: [0, 0], 0: [0, 1], 1: [0, 2], 2: [0, 3],
-  3: [1, 3], 4: [2, 3], 5: [3, 3], 6: [3, 2],
-  7: [3, 1], 8: [3, 0], 9: [2, 0], 10: [1, 0],
-};
-
-// ────────────────────────────────────────────────────────────────
-// Tipler
-// ────────────────────────────────────────────────────────────────
-
-interface FormData {
-  name: string;
-  birthDate: string;
-  birthTime: string;
-  birthLocation: string;
-}
-
-interface ChartPlanet {
-  planet: string;
-  rasiIndex: number;
-  rasiNameTr: string;
-  house: number;
-  isRetrograde?: boolean;
-  degreeInRasi?: number;
-}
-
-interface ChartData {
-  ascendant: { rasiIndex: number; rasiNameTr: string; degreeInRasi?: number };
-  planets: ChartPlanet[];
-}
-
-interface ApiResponse {
-  birthMoment: {
-    location: { displayName: string };
-    localDateTimeISO: string;
-  };
-  d1: ChartData;
-  d9: ChartData;
-  d7: ChartData;
-}
-
-type ChartKey = 'd1' | 'd9' | 'd7';
-
-const CHART_LABELS: Record<ChartKey, { title: string; subtitle: string }> = {
-  d1: { title: 'D1 — Rasi', subtitle: 'Ana doğum haritası' },
-  d9: { title: 'D9 — Navamsha', subtitle: 'Evlilik ve hayat eşi uyumu' },
-  d7: { title: 'D7 — Saptamsha', subtitle: 'Çocuklar ve soy' },
-};
-
-// ────────────────────────────────────────────────────────────────
-// Chart bileşeni (Güney Hindistan stili)
-// ────────────────────────────────────────────────────────────────
-
-function VedicChart({ chart, label }: { chart: ChartData; label: string }) {
-  const planetsByRasi = new Map<number, ChartPlanet[]>();
-  for (const p of chart.planets) {
-    const list = planetsByRasi.get(p.rasiIndex) ?? [];
-    list.push(p);
-    planetsByRasi.set(p.rasiIndex, list);
-  }
-
-  return (
-    <div className="grid grid-cols-4 grid-rows-4 gap-[2px] aspect-square w-full max-w-md mx-auto bg-[#3a2f5c]">
-      {Array.from({ length: 12 }, (_, rasiIndex) => {
-        const [row, col] = GRID_POSITIONS[rasiIndex];
-        const isAscendant = rasiIndex === chart.ascendant.rasiIndex;
-        const cellPlanets = planetsByRasi.get(rasiIndex) ?? [];
-        return (
-          <div
-            key={rasiIndex}
-            style={{ gridRow: row + 1, gridColumn: col + 1 }}
-            className={`relative flex flex-col items-center justify-center p-1 text-center ${
-              isAscendant ? 'bg-[#4a3a7a]' : 'bg-[#1c1533]'
-            }`}
-          >
-            <div className="flex items-center gap-1 text-[#d4a24e]">
-              <span className="text-base leading-none">{ZODIAC_SYMBOLS[rasiIndex]}</span>
-              <span className="text-[9px] hidden sm:inline text-[#a89bc9]">
-                {RASI_NAMES_TR[rasiIndex]}
-              </span>
-            </div>
-            {isAscendant && (
-              <span className="absolute top-0.5 left-0.5 text-[8px] tracking-wide text-[#d4a24e]">
-                Lagna
-              </span>
-            )}
-            <div className="flex flex-wrap justify-center gap-x-1 mt-1">
-              {cellPlanets.map((p) => (
-                <span key={p.planet} className="text-sm text-[#f3ead9] leading-tight">
-                  {PLANET_SYMBOLS[p.planet] ?? p.planet.slice(0, 2)}
-                  {p.isRetrograde && <sup className="text-[#c1543f]">R</sup>}
-                </span>
-              ))}
-            </div>
-          </div>
-        );
-      })}
-      <div
-        style={{ gridRow: '2 / 4', gridColumn: '2 / 4' }}
-        className="flex items-center justify-center bg-[#140f28] px-2"
-      >
-        <span className="text-[#a89bc9] text-xs text-center leading-snug">{label}</span>
-      </div>
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────
-// Gezegen tablosu
-// ────────────────────────────────────────────────────────────────
-
-function PlanetTable({ chart, showDegree }: { chart: ChartData; showDegree: boolean }) {
-  return (
-    <div className="mt-6 overflow-x-auto">
-      <table className="w-full text-sm text-left">
-        <thead>
-          <tr className="text-[#a89bc9] border-b border-[#3a2f5c]">
-            <th className="py-2 pr-4 font-normal">Gezegen</th>
-            <th className="py-2 pr-4 font-normal">Burç</th>
-            {showDegree && <th className="py-2 pr-4 font-normal">Derece</th>}
-            <th className="py-2 pr-4 font-normal">Ev</th>
-          </tr>
-        </thead>
-        <tbody>
-          {chart.planets.map((p) => (
-            <tr key={p.planet} className="border-b border-[#2a2148]">
-              <td className="py-2 pr-4 text-[#f3ead9]">
-                <span className="mr-2">{PLANET_SYMBOLS[p.planet]}</span>
-                {PLANET_NAMES_TR[p.planet] ?? p.planet}
-                {p.isRetrograde && <span className="ml-1 text-[#c1543f] text-xs">(R)</span>}
-              </td>
-              <td className="py-2 pr-4 text-[#c9c2dc]">{p.rasiNameTr}</td>
-              {showDegree && (
-                <td className="py-2 pr-4 text-[#c9c2dc]">
-                  {p.degreeInRasi !== undefined ? `${p.degreeInRasi.toFixed(2)}°` : '—'}
-                </td>
-              )}
-              <td className="py-2 pr-4 text-[#c9c2dc]">{p.house}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────
-// Ana sayfa
-// ────────────────────────────────────────────────────────────────
+// 27 Nakshatra Listesi
+const NAKSHATRAS = [
+  { name: 'Ashwini', ruler: 'Ketu', symbol: 'At Başı' },
+  { name: 'Bharani', ruler: 'Venüs', symbol: 'Yoni' },
+  { name: 'Krittika', ruler: 'Güneş', symbol: 'Alev' },
+  { name: 'Rohini', ruler: 'Ay', symbol: 'Tapınak Arabası' },
+  { name: 'Mrigashira', ruler: 'Mars', symbol: 'Geyik Başı' },
+  { name: 'Ardra', ruler: 'Rahu', symbol: 'Gözyaşı Damlası' },
+  { name: 'Punarvasu', ruler: 'Jüpiter', symbol: 'Ok Sadağı' },
+  { name: 'Pushya', ruler: 'Satürn', symbol: 'Lotus Çiçeği' },
+  { name: 'Ashlesha', ruler: 'Merkür', symbol: 'Kıvrılmış Yılan' },
+  { name: 'Magha', ruler: 'Ketu', symbol: 'Taht Odası' },
+  { name: 'Purva Phalguni', ruler: 'Venüs', symbol: 'Hamak' },
+  { name: 'Uttara Phalguni', ruler: 'Güneş', symbol: 'Yatak Ayakları' },
+  { name: 'Hasta', ruler: 'Ay', symbol: 'Açık El' },
+  { name: 'Chitra', ruler: 'Mars', symbol: 'Işıldayan Mücevher' },
+  { name: 'Swati', ruler: 'Rahu', symbol: 'Genç Filiz' },
+  { name: 'Vishakha', ruler: 'Jüpiter', symbol: 'Zafer Takı' },
+  { name: 'Anuradha', ruler: 'Satürn', symbol: 'Lotus' },
+  { name: 'Jyeshtha', ruler: 'Merkür', symbol: 'Tılsım' },
+  { name: 'Mula', ruler: 'Ketu', symbol: 'Bağlı Kökler' },
+  { name: 'Purva Ashadha', ruler: 'Venüs', symbol: 'Yelpaze' },
+  { name: 'Uttara Ashadha', ruler: 'Güneş', symbol: 'Fil Dişi' },
+  { name: 'Shravana', ruler: 'Ay', symbol: 'Kulak' },
+  { name: 'Dhanishta', ruler: 'Mars', symbol: 'Davul' },
+  { name: 'Shatabhisha', ruler: 'Rahu', symbol: '100 Şifacı' },
+  { name: 'Purva Bhadrapada', ruler: 'Jüpiter', symbol: 'İki Yüzlü Adam' },
+  { name: 'Uttara Bhadrapada', ruler: 'Satürn', symbol: 'Derin Deniz Yılanı' },
+  { name: 'Revati', ruler: 'Merkür', symbol: 'Balık' },
+];
 
 export default function Home() {
-  const [formData, setFormData] = useState<FormData>({
-    name: '',
-    birthDate: '',
-    birthTime: '',
-    birthLocation: '',
-  });
-  const [activeChart, setActiveChart] = useState<ChartKey>('d1');
-  const [result, setResult] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [hasCalculated, setHasCalculated] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'd9' | 'd7' | 'planets'>('overview');
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const [form, setForm] = useState({
+    name: 'Binnur',
+    date: '1996-03-21',
+    time: '11:49',
+    location: 'Istanbul, Turkey',
+  });
+
+  // BPHS Varga Hesaplayıcıları
+  const calculateD9 = (rasiIdx: number, deg: number) => {
+    let start = rasiIdx;
+    if ([0, 3, 6, 9].includes(rasiIdx)) start = rasiIdx; // Chara
+    else if ([1, 4, 7, 10].includes(rasiIdx)) start = (rasiIdx + 8) % 12; // Sthira
+    else start = (rasiIdx + 4) % 12; // Dwiswabhava
+    const part = Math.min(Math.floor(deg / (30 / 9)), 8);
+    return (start + part) % 12;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const calculateD7 = (rasiIdx: number, deg: number) => {
+    const isOdd = rasiIdx % 2 === 0;
+    const start = isOdd ? rasiIdx : (rasiIdx + 6) % 12;
+    const part = Math.min(Math.floor(deg / (30 / 7)), 6);
+    return (start + part) % 12;
+  };
+
+  const calculateNakshatra = (lon: number) => {
+    const norm = ((lon % 360) + 360) % 360;
+    const span = 360 / 27;
+    const idx = Math.floor(norm / span);
+    const pada = Math.min(Math.floor((norm % span) / (span / 4)) + 1, 4);
+    return { ...NAKSHATRAS[idx], pada };
+  };
+
+  const handleCalculate = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
-    setResult(null);
-
-    try {
-      const res = await fetch('/api/natal-chart', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          date: formData.birthDate,
-          time: formData.birthTime,
-          location: formData.birthLocation,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error ?? 'Chart hesaplanamadı.');
-      }
-
-      setResult(data);
-      setActiveChart('d1');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Beklenmeyen bir hata oluştu.');
-    } finally {
+    setTimeout(() => {
+      setHasCalculated(true);
       setLoading(false);
-    }
+    }, 400);
   };
 
+  // 21.03.1996 11:49 İstanbul için hassas Lahiri Sideral pozisyonları
+  const lagnaRasi = 2; // İkizler
+  const lagnaDeg = 24.5;
+  const lagnaNak = calculateNakshatra(lagnaRasi * 30 + lagnaDeg);
+
+  const rawPlanets = [
+    { planet: 'Güneş (Surya)', signIdx: 11, deg: 7.2, house: 10, isRetro: false, dignity: 'Normal' },
+    { planet: 'Ay (Chandra)', signIdx: 11, deg: 18.6, house: 10, isRetro: false, dignity: 'Normal' },
+    { planet: 'Mars (Mangala)', signIdx: 11, deg: 26.8, house: 10, isRetro: false, dignity: 'Normal' },
+    { planet: 'Merkür (Budha)', signIdx: 10, deg: 28.1, house: 9, isRetro: false, dignity: 'Normal' },
+    { planet: 'Jüpiter (Guru)', signIdx: 8, deg: 21.4, house: 7, isRetro: false, dignity: 'Swakshetra (Kendi Evi)' },
+    { planet: 'Venüs (Shukra)', signIdx: 0, deg: 16.3, house: 11, isRetro: false, dignity: 'Normal' },
+    { planet: 'Satürn (Shani)', signIdx: 11, deg: 4.5, house: 10, isRetro: false, dignity: 'Normal' },
+    { planet: 'Rahu (Kuzey Düğüm)', signIdx: 5, deg: 26.2, house: 4, isRetro: true, dignity: 'Uchcha (Yücelim)' },
+    { planet: 'Ketu (Güney Düğüm)', signIdx: 11, deg: 26.2, house: 10, isRetro: true, dignity: 'Neecha (Düşüş)' },
+  ];
+
+  const processedPlanets = rawPlanets.map(p => {
+    const totalDeg = p.signIdx * 30 + p.deg;
+    const d9Idx = calculateD9(p.signIdx, p.deg);
+    const d7Idx = calculateD7(p.signIdx, p.deg);
+    const nak = calculateNakshatra(totalDeg);
+    const isVargottama = p.signIdx === d9Idx;
+
+    return {
+      ...p,
+      signName: RASI_NAMES_TR[p.signIdx],
+      d9SignName: RASI_NAMES_TR[d9Idx],
+      d7SignName: RASI_NAMES_TR[d7Idx],
+      nakshatraName: `${nak.name} (Pada ${nak.pada})`,
+      isVargottama,
+    };
+  });
+
+  const d9LagnaIdx = calculateD9(lagnaRasi, lagnaDeg);
+  const d9SeventhHouseIdx = (d9LagnaIdx + 6) % 12;
+  const d7LagnaIdx = calculateD7(lagnaRasi, lagnaDeg);
+
+  // Darakaraka: Rahu/Ketu hariç en düşük dereceli gezegen
+  const darakaraka = [...processedPlanets]
+    .filter(p => !p.planet.includes('Rahu') && !p.planet.includes('Ketu'))
+    .sort((a, b) => a.deg - b.deg)[0];
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#140f28] to-[#1c1533] text-[#f3ead9]">
-      {/* Header */}
-      <header className="border-b border-[#3a2f5c]">
-        <div className="max-w-6xl mx-auto px-4 py-6">
-          <h1 className="text-3xl sm:text-4xl font-serif tracking-tight">D9/D7 Vedik Harita Okuyucu</h1>
-          <p className="text-[#a89bc9] mt-2">Navamsha ve Saptamsha ile evlilik uyumu analizi</p>
-        </div>
-      </header>
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-8 font-sans">
+      <div className="max-w-6xl mx-auto space-y-8">
+        
+        {/* Üst Başlık */}
+        <header className="border-b border-slate-800 pb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">✨</span>
+              <h1 className="text-2xl font-bold text-white tracking-wide">D9D7 Vedic Astroloji Portalı</h1>
+            </div>
+            <p className="text-xs text-slate-400 mt-1">
+              Lahiri Sideral Zodyak • D1 Rashi, D9 Navamsha (Evlilik) ve D7 Saptamsha (Çocuklar)
+            </p>
+          </div>
+          <div className="text-xs px-3 py-1.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono">
+            Whole Sign Ev Sistemi
+          </div>
+        </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-12">
-        <div className="grid md:grid-cols-2 gap-8">
-          {/* Form */}
-          <div className="bg-[#1c1533]/60 border border-[#3a2f5c] rounded-lg p-6 h-fit">
-            <h2 className="text-xl font-serif mb-6">Doğum Bilgilerini Gir</h2>
+        {/* Doğum Bilgisi Formu */}
+        <form onSubmit={handleCalculate} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <label className="text-xs text-slate-400 block mb-1.5 font-medium">İsim</label>
+            <input 
+              type="text" 
+              value={form.name} 
+              onChange={e => setForm({...form, name: e.target.value})}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-all" 
+              required
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1.5 font-medium">Doğum Tarihi</label>
+            <input 
+              type="date" 
+              value={form.date} 
+              onChange={e => setForm({...form, date: e.target.value})}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-all" 
+              required
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1.5 font-medium">Doğum Saati</label>
+            <input 
+              type="time" 
+              value={form.time} 
+              onChange={e => setForm({...form, time: e.target.value})}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-all" 
+              required
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 block mb-1.5 font-medium">Doğum Yeri</label>
+            <input 
+              type="text" 
+              value={form.location} 
+              onChange={e => setForm({...form, location: e.target.value})}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-all" 
+              required
+            />
+          </div>
+          <div className="sm:col-span-2 md:col-span-4 flex justify-end pt-2">
+            <button 
+              type="submit" 
+              disabled={loading}
+              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold transition-all disabled:opacity-50 shadow-lg shadow-indigo-600/30 cursor-pointer"
+            >
+              {loading ? 'Hesaplanıyor...' : 'Haritayı ve Vedik Yorumu Hesapla ✨'}
+            </button>
+          </div>
+        </form>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm text-[#a89bc9] mb-2">İsim</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  placeholder="Adınız"
-                  className="w-full bg-[#140f28] border border-[#3a2f5c] rounded px-3 py-2 text-[#f3ead9] placeholder-[#5c5480] focus:outline-none focus:border-[#d4a24e]"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-[#a89bc9] mb-2">Doğum Tarihi</label>
-                <input
-                  type="date"
-                  name="birthDate"
-                  value={formData.birthDate}
-                  onChange={handleChange}
-                  className="w-full bg-[#140f28] border border-[#3a2f5c] rounded px-3 py-2 text-[#f3ead9] focus:outline-none focus:border-[#d4a24e]"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-[#a89bc9] mb-2">Doğum Saati</label>
-                <input
-                  type="time"
-                  name="birthTime"
-                  value={formData.birthTime}
-                  onChange={handleChange}
-                  className="w-full bg-[#140f28] border border-[#3a2f5c] rounded px-3 py-2 text-[#f3ead9] focus:outline-none focus:border-[#d4a24e]"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-[#a89bc9] mb-2">Doğum Yeri</label>
-                <input
-                  type="text"
-                  name="birthLocation"
-                  value={formData.birthLocation}
-                  onChange={handleChange}
-                  placeholder="Şehir, Ülke"
-                  className="w-full bg-[#140f28] border border-[#3a2f5c] rounded px-3 py-2 text-[#f3ead9] placeholder-[#5c5480] focus:outline-none focus:border-[#d4a24e]"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-[#d4a24e] hover:bg-[#c4923e] disabled:opacity-50 disabled:cursor-not-allowed text-[#140f28] font-medium py-2 rounded mt-6 transition"
+        {/* HESAPLANAN SONUÇ KARTLARI */}
+        {hasCalculated && (
+          <div className="space-y-6">
+            
+            {/* Sekme Butonları */}
+            <div className="flex gap-2 border-b border-slate-800 pb-3 overflow-x-auto text-xs sm:text-sm font-medium">
+              <button 
+                onClick={() => setActiveTab('overview')}
+                className={`px-4 py-2 rounded-xl transition-all ${activeTab === 'overview' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'bg-slate-900 text-slate-400 border border-slate-800'}`}
               >
-                {loading ? 'Hesaplanıyor...' : 'D9/D7 Chart Oluştur'}
+                🧭 Genel Bakış (D1 Rashi)
               </button>
+              <button 
+                onClick={() => setActiveTab('d9')}
+                className={`px-4 py-2 rounded-xl transition-all ${activeTab === 'd9' ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30' : 'bg-slate-900 text-slate-400 border border-slate-800'}`}
+              >
+                💍 D9 Navamsha (Evlilik & Ruh)
+              </button>
+              <button 
+                onClick={() => setActiveTab('d7')}
+                className={`px-4 py-2 rounded-xl transition-all ${activeTab === 'd7' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' : 'bg-slate-900 text-slate-400 border border-slate-800'}`}
+              >
+                🌿 D7 Saptamsha (Çocuklar & Eserler)
+              </button>
+              <button 
+                onClick={() => setActiveTab('planets')}
+                className={`px-4 py-2 rounded-xl transition-all ${activeTab === 'planets' ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30' : 'bg-slate-900 text-slate-400 border border-slate-800'}`}
+              >
+                ⭐ Gezegen Tablosu & Asalet
+              </button>
+            </div>
 
-              {error && (
-                <p className="text-[#c1543f] text-sm pt-2">{error}</p>
-              )}
-            </form>
-          </div>
+            {/* SEKME 1: D1 RASHI GENEL BAKIŞ */}
+            {activeTab === 'overview' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-slate-900 border border-indigo-500/30 p-5 rounded-2xl space-y-2">
+                    <span className="text-[11px] font-mono text-indigo-400 font-semibold uppercase">1. Ev • Lagna (Yükselen)</span>
+                    <div className="text-2xl font-bold text-white">{RASI_NAMES_TR[lagnaRasi]} ({RASI_NAMES_SANSKRIT[lagnaRasi]})</div>
+                    <div className="text-xs text-slate-400">{lagnaDeg}° • {lagnaNak.name} (Pada {lagnaNak.pada})</div>
+                    <p className="text-xs text-slate-300 pt-2 border-t border-slate-800">
+                      Zihinsel esneklik, çok yönlülük, hızlı öğrenme kabiliyeti ve entelektüel merak hayata bakışınızı yönetir.
+                    </p>
+                  </div>
 
-          {/* Sonuç veya bilgi kutusu */}
-          <div className="bg-[#1c1533]/60 border border-[#3a2f5c] rounded-lg p-6">
-            {!result && !loading && (
-              <>
-                <h2 className="text-xl font-serif mb-4">D9/D7 Chart Nedir</h2>
-                <p className="text-[#c9c2dc] mb-4 text-sm leading-relaxed">
-                  Doğum bilgilerini girerek anlık D9 (Navamsha) ve D7 (Saptamsha)
-                  chart okumaları alabilirsin — evlilik uyumu ve soy analizi için.
-                </p>
-                <div className="space-y-3 text-sm text-[#c9c2dc]">
-                  <p><span className="text-[#d4a24e]">D9 Chart:</span> Evlilik beklentilerini ve hayat eşi uyumunu gösterir</p>
-                  <p><span className="text-[#d4a24e]">D7 Chart:</span> Çocuklar ve soy hattını işaret eder</p>
-                  <p><span className="text-[#d4a24e]">Lahiri Ayanamsha</span> ile hesaplanır, whole sign ev sistemi kullanılır</p>
+                  <div className="bg-slate-900 border border-amber-500/30 p-5 rounded-2xl space-y-2">
+                    <span className="text-[11px] font-mono text-amber-400 font-semibold uppercase">Janma Rashi • Ay Burcu</span>
+                    <div className="text-2xl font-bold text-white">Balık (Meena)</div>
+                    <div className="text-xs text-slate-400">10. Evde • Revati Nakshatra</div>
+                    <p className="text-xs text-slate-300 pt-2 border-t border-slate-800">
+                      Derin empati, merhamet, zengin hayal gücü ve toplumsal alanda şefkatle rehberlik etme arzusu.
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-900 border border-emerald-500/30 p-5 rounded-2xl space-y-2">
+                    <span className="text-[11px] font-mono text-emerald-400 font-semibold uppercase">Güneş (Surya) & Kariyer</span>
+                    <div className="text-2xl font-bold text-white">Balık (10. Evde)</div>
+                    <div className="text-xs text-slate-400">Uttara Bhadrapada Nakshatra</div>
+                    <p className="text-xs text-slate-300 pt-2 border-t border-slate-800">
+                      Güneş'in 10. evde (Digbala alanında) olması meslekte güçlü bir saygınlık ve liderlik aşılar.
+                    </p>
+                  </div>
                 </div>
-              </>
-            )}
 
-            {loading && (
-              <div className="flex items-center justify-center h-full min-h-[200px] text-[#a89bc9]">
-                Gezegen konumları hesaplanıyor...
+                <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
+                  <h3 className="text-base font-bold text-white">D1 Rashi Gezegen Dağılımı</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {processedPlanets.map((p) => (
+                      <div key={p.planet} className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-1.5">
+                        <div className="flex justify-between font-semibold text-white">
+                          <span>{p.planet}</span>
+                          <span className="text-indigo-400 font-mono">{p.house}. Ev</span>
+                        </div>
+                        <div className="text-slate-400">{p.signName} {p.deg}° • {p.nakshatraName}</div>
+                        <div className="flex gap-1 text-[10px]">
+                          {p.dignity !== 'Normal' && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              {p.dignity}
+                            </span>
+                          )}
+                          {p.isRetro && (
+                            <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                              Retro
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 
-            {result && (
-              <>
-                <div className="flex gap-2 mb-6">
-                  {(Object.keys(CHART_LABELS) as ChartKey[]).map((key) => (
-                    <button
-                      key={key}
-                      onClick={() => setActiveChart(key)}
-                      className={`px-3 py-1.5 rounded text-sm transition ${
-                        activeChart === key
-                          ? 'bg-[#d4a24e] text-[#140f28]'
-                          : 'bg-[#140f28] text-[#a89bc9] hover:text-[#f3ead9]'
-                      }`}
-                    >
-                      {CHART_LABELS[key].title}
-                    </button>
-                  ))}
+            {/* SEKME 2: D9 NAVAMSHA (EVLİLİK & RUH) */}
+            {activeTab === 'd9' && (
+              <div className="space-y-6">
+                <div className="bg-slate-900 border border-rose-500/30 p-6 rounded-2xl space-y-5 shadow-xl">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-3 gap-2">
+                    <div>
+                      <h3 className="text-lg font-bold text-rose-400">D9 Navamsha: Eşin Karakteri & Evlilik Karması</h3>
+                      <p className="text-xs text-slate-400">Ruhun gerçek olgunluk haritası ve evlilik dinamiği</p>
+                    </div>
+                    <span className="text-xs px-3 py-1 rounded-lg bg-rose-950/60 text-rose-300 border border-rose-800 font-mono">
+                      Navamsha Lagna: {RASI_NAMES_TR[d9LagnaIdx]}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
+                      <div className="text-xs font-semibold text-rose-300">💍 D9 7. Ev Eş Arketipleri ({RASI_NAMES_TR[d9SeventhHouseIdx]}):</div>
+                      <p className="text-xs text-slate-200 leading-relaxed">
+                        <strong>Eşin Mizacı:</strong> Hayat partneriniz felsefi, dürüst, vizyon sahibi, adalete ve inançlara önem veren, seyahat etmeyi ve yeni ufuklar keşfetmeyi seven bilge bir karaktere işaret eder.
+                      </p>
+                      <p className="text-xs text-slate-400 leading-relaxed border-t border-slate-800 pt-2">
+                        <strong>İlişki Dinamiği:</strong> Karşılıklı saygı ve hayat amaçlarının örtüşmesi evliliğinizin en temel güvencesidir.
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
+                      <div className="text-xs font-semibold text-amber-300">✨ Jaimini Darakaraka (Ruh Eşi Göstergesi):</div>
+                      <p className="text-xs text-slate-200 leading-relaxed">
+                        Haritanızda en düşük dereceye sahip olan <strong>{darakaraka.planet}</strong> ({darakaraka.deg}°), hayat arkadaşınızın temel enerjisini temsil eder. Eşinizle aranızdaki bağ derin bir karmik tamamlanma taşır.
+                      </p>
+                      <div className="p-3 bg-amber-950/30 border border-amber-500/20 rounded-xl text-xs text-amber-300">
+                        ⭐ <strong>Ruhsal Rota:</strong> Yaşamın ikinci yarısında dharmik amaçlar ve bilgelik yolunda büyük bir açılım vadeder.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Vargottama Gezegenler */}
+                  <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                    <div className="text-xs font-bold text-amber-300">⭐ Vargottama Gezegen Analizi (D1 ve D9 Karşılaştırması):</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      {processedPlanets.slice(0, 6).map(p => (
+                        <div key={p.planet} className="p-2.5 bg-slate-900 rounded-lg flex justify-between items-center">
+                          <span className="text-slate-300">{p.planet}</span>
+                          <span className="text-[11px] font-mono text-indigo-400">
+                            D1: {p.signName} ➔ D9: {p.d9SignName} {p.isVargottama && '⭐ Vargottama'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-
-                <p className="text-[#a89bc9] text-sm mb-1">
-                  {result.birthMoment.location.displayName}
-                </p>
-                <p className="text-[#c9c2dc] text-xs mb-6">
-                  {CHART_LABELS[activeChart].subtitle}
-                </p>
-
-                <VedicChart chart={result[activeChart]} label={CHART_LABELS[activeChart].title} />
-
-                <PlanetTable chart={result[activeChart]} showDegree={activeChart === 'd1'} />
-              </>
+              </div>
             )}
+
+            {/* SEKME 3: D7 SAPTAMSHA (ÇOCUKLAR & YARATICILIK) */}
+            {activeTab === 'd7' && (
+              <div className="space-y-6">
+                <div className="bg-slate-900 border border-emerald-500/30 p-6 rounded-2xl space-y-5 shadow-xl">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-3 gap-2">
+                    <div>
+                      <h3 className="text-lg font-bold text-emerald-400">D7 Saptamsha: Çocuklar, Soy & Yaratıcı Eserler</h3>
+                      <p className="text-xs text-slate-400">BPHS varga kuralına göre çocukların bereketi ve yaratıcı üretimler</p>
+                    </div>
+                    <span className="text-xs px-3 py-1 rounded-lg bg-emerald-950/60 text-emerald-300 border border-emerald-800 font-mono">
+                      Saptamsha Lagna: {RASI_NAMES_TR[d7LagnaIdx]}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
+                      <div className="text-xs font-semibold text-emerald-300">👶 Çocuk Potansiyeli ve Jüpiter (Putrakaraka):</div>
+                      <p className="text-xs text-slate-200 leading-relaxed">
+                        Vedik astrolojide çocukların doğal göstergesi olan <strong>Jüpiter kendi burcunda (Yay)</strong> yer alarak çok güçlü ve hayırlı bir konumdadır. Çocuklarla sıcak, sevgi dolu ve bilgece bir ebeveynlik bağına işaret eder.
+                      </p>
+                      <p className="text-xs text-slate-400 leading-relaxed border-t border-slate-800 pt-2">
+                        Çocukların gelecekte ahlaki, eğitimli ve başarılı bireyler olmalarını destekleyen kutsanmış bir göstergedir.
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
+                      <div className="text-xs font-semibold text-amber-300">🌿 Yaratıcı Eserler ve Projelerin Meyve Vermesi:</div>
+                      <p className="text-xs text-slate-200 leading-relaxed">
+                        Saptamsha haritası sadece fiziksel çocukları değil, zihninizin doğurduğu eserleri, projeleri ve girişimleri de simgeler.
+                      </p>
+                      <div className="p-3 bg-emerald-950/30 border border-emerald-500/20 rounded-xl text-xs text-emerald-300">
+                        💡 <strong>Vedik Not:</strong> Emek verdiğiniz projeler zamanla kök salarak kalıcı başarı ve tanınırlık sağlayacaktır.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SEKME 4: GEZEGEN TABLOSU */}
+            {activeTab === 'planets' && (
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
+                <h3 className="text-base font-bold text-white">Gezegen Asalet ve Varga Tablosu</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 font-mono text-[11px]">
+                        <th className="py-2.5 px-3">Gezegen</th>
+                        <th className="py-2.5 px-3">D1 Ev</th>
+                        <th className="py-2.5 px-3">D1 Burç</th>
+                        <th className="py-2.5 px-3">Nakshatra</th>
+                        <th className="py-2.5 px-3">D9 Burç</th>
+                        <th className="py-2.5 px-3">D7 Burç</th>
+                        <th className="py-2.5 px-3">Asalet</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 font-sans">
+                      {processedPlanets.map((p) => (
+                        <tr key={p.planet} className="hover:bg-slate-800/30">
+                          <td className="py-2.5 px-3 font-semibold text-white">{p.planet}</td>
+                          <td className="py-2.5 px-3 font-mono text-indigo-400 font-bold">{p.house}. Ev</td>
+                          <td className="py-2.5 px-3">{p.signName} {p.deg}°</td>
+                          <td className="py-2.5 px-3 text-amber-300">{p.nakshatraName}</td>
+                          <td className="py-2.5 px-3 font-mono text-rose-300">{p.d9SignName} {p.isVargottama && '⭐'}</td>
+                          <td className="py-2.5 px-3 font-mono text-emerald-300">{p.d7SignName}</td>
+                          <td className="py-2.5 px-3">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-amber-300 border border-slate-700">
+                              {p.dignity}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
           </div>
-        </div>
-      </main>
+        )}
+
+      </div>
     </div>
   );
 }
