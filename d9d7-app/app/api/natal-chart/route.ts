@@ -1,3 +1,4 @@
+import { generateVedicInterpretation } from '@/lib/astro/interpretation';
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveBirthMoment } from '@/lib/astro/resolveBirthMoment';
 import { castD1Chart } from '@/lib/astro/chart';
@@ -23,7 +24,9 @@ export async function POST(req: NextRequest) {
     );
     const d9 = castD9Chart(d1);
     const d7 = castD7Chart(d1);
+const interpretation = generateVedicInterpretation(d1, d9, d7);
 
+return NextResponse.json({ birthMoment, d1, d9, d7, interpretation });
     return NextResponse.json({ birthMoment, d1, d9, d7 });
   } catch (err) {
     console.error(err);
